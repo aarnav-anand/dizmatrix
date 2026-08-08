@@ -1,0 +1,58 @@
+{
+  "app": {
+    "name": "DizMatrix",
+    "tagline": "Map your field. Know what's coming for it."
+  },
+  "map": {
+    "instructions": "Use the polygon tool on the map to trace your field boundary.",
+    "instructionsShort": "Draw your field boundary to begin",
+    "redraw": "Clear & redraw",
+    "editHint": "Click the polygon icon, then click each corner of your field. Double-click to finish.",
+    "attribution": "Map data"
+  },
+  "controls": {
+    "searchRadius": "Search radius",
+    "km": "km",
+    "language": "Language",
+    "run": "Run risk assessment",
+    "running": "Checking nearby reports…"
+  },
+  "empty": {
+    "title": "No field mapped yet",
+    "body": "Trace your farm's boundary on the map to see which diseases have been reported nearby and how much risk they pose to your crop."
+  },
+  "results": {
+    "heading": "Risk assessment",
+    "overall": "Overall field risk",
+    "area": "Field area",
+    "hectares": "ha",
+    "reportsConsidered": "Reports considered",
+    "noReports": "No disease reports found within {{radius}} km of this field. That's good news — but keep scouting.",
+    "nearest": "Nearest report",
+    "reportsPlural": "{{count}} report",
+    "reportsPlural_other": "{{count}} reports",
+    "insideField": "{{count}} inside your boundary",
+    "lastSeen": "Last reported",
+    "avgConfidence": "Avg. detection confidence",
+    "sourceNote": "Assessment derived from crowd-reported field observations. Treat as guidance, not diagnosis."
+  },
+  "risk": {
+    "low": "Low",
+    "moderate": "Moderate",
+    "high": "High",
+    "critical": "Critical"
+  },
+  "legend": {
+    "title": "Map legend",
+    "farm": "Your field",
+    "inside": "Report inside your field",
+    "low": "Low-risk report",
+    "moderate": "Moderate-risk report",
+    "high": "High-risk report",
+    "critical": "Critical report"
+  },
+  "errors": {
+    "fetchFailed": "Couldn't reach the report database. Check your connection and try again.",
+    "needPolygon": "Draw a field boundary first."
+  }
+}

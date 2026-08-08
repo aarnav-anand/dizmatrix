@@ -1,0 +1,221 @@
+import L from "leaflet";
+import "leaflet-draw";
+import {
+  forwardRef,
+  useEffect,
+  useImperativeHandle,
+  useRef,
+} from "react";
+import { useTranslation } from "react-i18next";
+import { reportMarkerLevel } from "../lib/risk";
+import type { LatLng, RiskLevel, ScoredReport } from "../types";
+import Legend from "./Legend";
+
+const LEVEL_HEX: Record<RiskLevel, string> = {
+  low: "#8cc63f",
+  moderate: "#e3a537",
+  high: "#b23a2e",
+  critical: "#d9503f",
+};
+
+// Fallback centre roughly over the user's region (Karjan, Gujarat) so the
+// map opens somewhere useful before a farm is drawn.
+const DEFAULT_CENTER: LatLng = { lat: 22.11, lng: 73.18 };
+const DEFAULT_ZOOM = 13;
+
+export interface MapCanvasHandle {
+  clear: () => void;
+}
+
+interface Props {
+  onPolygonChange: (polygon: LatLng[] | null) => void;
+  scoredReports: ScoredReport[];
+  radiusKm: number;
+  farmPolygon: LatLng[] | null;
+}
+
+const MapCanvas = forwardRef<MapCanvasHandle, Props>(function MapCanvas(
+  { onPolygonChange, scoredReports, radiusKm, farmPolygon },
+  ref
+) {
+  const { t } = useTranslation();
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const mapRef = useRef<L.Map | null>(null);
+  const drawnItemsRef = useRef<L.FeatureGroup | null>(null);
+  const reportsLayerRef = useRef<L.LayerGroup | null>(null);
+  const radiusLayerRef = useRef<L.Circle | null>(null);
+  const onPolygonChangeRef = useRef(onPolygonChange);
+  onPolygonChangeRef.current = onPolygonChange;
+
+  // Map + draw control setup — runs once.
+  useEffect(() => {
+    if (!containerRef.current || mapRef.current) return;
+
+    const map = L.map(containerRef.current, {
+      zoomControl: true,
+    }).setView([DEFAULT_CENTER.lat, DEFAULT_CENTER.lng], DEFAULT_ZOOM);
+
+    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+      maxZoom: 19,
+      attribution:
+        '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+    }).addTo(map);
+
+    const drawnItems = new L.FeatureGroup();
+    map.addLayer(drawnItems);
+    drawnItemsRef.current = drawnItems;
+
+    const reportsLayer = L.layerGroup().addTo(map);
+    reportsLayerRef.current = reportsLayer;
+
+    const drawControl = new (L.Control as any).Draw({
+      position: "topleft",
+      draw: {
+        polygon: {
+          allowIntersection: false,
+          showArea: true,
+          shapeOptions: { color: "#8cc63f", weight: 2, fillOpacity: 0.12 },
+        },
+        polyline: false,
+        rectangle: false,
+        circle: false,
+        circlemarker: false,
+        marker: false,
+      },
+      edit: {
+        featureGroup: drawnItems,
+        remove: true,
+      },
+    });
+    map.addControl(drawControl);
+
+    const extractLatLngs = (layer: L.Layer): LatLng[] => {
+      const latlngs = (layer as L.Polygon).getLatLngs()[0] as L.LatLng[];
+      return latlngs.map((p) => ({ lat: p.lat, lng: p.lng }));
+    };
+
+    map.on((L as any).Draw.Event.CREATED, (e: any) => {
+      drawnItems.clearLayers(); // only one farm boundary at a time
+      const layer = e.layer;
+      drawnItems.addLayer(layer);
+      onPolygonChangeRef.current(extractLatLngs(layer));
+    });
+
+    map.on((L as any).Draw.Event.EDITED, (e: any) => {
+      const layers = e.layers as L.LayerGroup;
+      let coords: LatLng[] | null = null;
+      layers.eachLayer((layer: L.Layer) => {
+        coords = extractLatLngs(layer);
+      });
+      if (coords) onPolygonChangeRef.current(coords);
+    });
+
+    map.on((L as any).Draw.Event.DELETED, () => {
+      onPolygonChangeRef.current(null);
+    });
+
+    mapRef.current = map;
+
+    return () => {
+      map.remove();
+      mapRef.current = null;
+    };
+  }, []);
+
+  // Expose imperative clear() to the parent's "clear & redraw" button.
+  useImperativeHandle(ref, () => ({
+    clear: () => {
+      drawnItemsRef.current?.clearLayers();
+      radiusLayerRef.current = null;
+      onPolygonChangeRef.current(null);
+    },
+  }));
+
+  // Redraw the search-radius circle whenever the farm polygon or radius changes.
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+
+    if (radiusLayerRef.current) {
+      map.removeLayer(radiusLayerRef.current);
+      radiusLayerRef.current = null;
+    }
+
+    if (farmPolygon && farmPolygon.length >= 3) {
+      const lat =
+        farmPolygon.reduce((s, p) => s + p.lat, 0) / farmPolygon.length;
+      const lng =
+        farmPolygon.reduce((s, p) => s + p.lng, 0) / farmPolygon.length;
+
+      const circle = L.circle([lat, lng], {
+        radius: radiusKm * 1000,
+        color: "#4f8ec7",
+        weight: 1,
+        fillOpacity: 0.03,
+        dashArray: "4 6",
+      }).addTo(map);
+      radiusLayerRef.current = circle;
+
+      const bounds = circle.getBounds();
+      map.fitBounds(bounds, { padding: [24, 24] });
+    }
+  }, [farmPolygon, radiusKm]);
+
+  // Redraw report markers whenever the scored set changes.
+  useEffect(() => {
+    const layer = reportsLayerRef.current;
+    if (!layer) return;
+    layer.clearLayers();
+
+    for (const r of scoredReports) {
+      const level = reportMarkerLevel(r.weight);
+      const color = LEVEL_HEX[level];
+      const marker = L.circleMarker([r.latitude, r.longitude], {
+        radius: r.insidePolygon ? 8 : 6,
+        color,
+        weight: r.insidePolygon ? 2.5 : 1.5,
+        fillColor: color,
+        fillOpacity: r.insidePolygon ? 0.85 : 0.55,
+      });
+
+      const dateStr = r.reported_at
+        ? new Date(r.reported_at).toLocaleDateString()
+        : "—";
+      const confidencePct =
+        r.confidence != null
+          ? `${Math.round((r.confidence > 1 ? r.confidence : r.confidence * 100))}%`
+          : "—";
+
+      marker.bindPopup(
+        `<div class="map-popup">
+          <b>${escapeHtml(r.disease ?? r.disease_class ?? "—")}</b><br/>
+          ${escapeHtml(r.crop ?? "—")}<br/>
+          ${dateStr} · ${confidencePct} confidence<br/>
+          ${r.distanceKm.toFixed(1)} km away
+          <div class="risk-tag" style="color:${color}">${t(
+          `risk.${level}`
+        )}</div>
+        </div>`
+      );
+
+      marker.addTo(layer);
+    }
+  }, [scoredReports, t]);
+
+  return (
+    <div className="map-area">
+      <div ref={containerRef} className="leaflet-map" role="application" />
+      <Legend />
+    </div>
+  );
+});
+
+function escapeHtml(s: string): string {
+  return s
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+export default MapCanvas;
