@@ -7,7 +7,7 @@
     "instructions": "Use the polygon tool on the map to trace your field boundary.",
     "instructionsShort": "Draw your field boundary to begin",
     "redraw": "Clear & redraw",
-    "editHint": "Click the polygon icon, then click each corner of your field. Double-click to finish.",
+    "editHint": "Tap the polygon icon, then tap each corner of your field. Tap the first corner again, or use the Finish button, to close the shape.",
     "attribution": "Map data"
   },
   "controls": {

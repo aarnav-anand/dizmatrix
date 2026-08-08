@@ -542,8 +542,17 @@ input[type="range"] {
   background-color: var(--color-bg-panel) !important;
 }
 
-.leaflet-draw-toolbar a {
+.leaflet-pm-toolbar a {
   background-color: var(--color-bg-panel-raised) !important;
+}
+
+.leaflet-pm-toolbar a:hover {
+  background-color: var(--color-bg-panel) !important;
+}
+
+.leaflet-pm-actions-container a {
+  background-color: var(--color-bg-panel-raised) !important;
+  color: var(--color-text) !important;
 }
 
 .leaflet-popup-content-wrapper {

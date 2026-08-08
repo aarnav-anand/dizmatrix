@@ -22,7 +22,7 @@ field reports to give you a risk assessment — in English or Hindi.
 ## Tech stack
 
 - **Vite + React + TypeScript**
-- **Leaflet + Leaflet.draw** for the map and polygon drawing tool (OpenStreetMap tiles, no API key required)
+- **Leaflet + Leaflet-Geoman (free)** for the map and polygon drawing tool (OpenStreetMap tiles, no API key required). Geoman is used instead of the older Leaflet.draw plugin because Leaflet.draw has a known compatibility break with Leaflet 1.9's touch-event handling — it tends to work for one shape on mobile and then get stuck. Geoman is actively maintained, and shows an explicit on-screen "finish" button while drawing instead of relying on a double-tap gesture.
 - **@supabase/supabase-js** for reading the `disease_reports` table
 - **react-i18next** for English/Hindi localization (toggle in the header)
 

@@ -1,5 +1,5 @@
 import L from "leaflet";
-import "leaflet-draw";
+import "@geoman-io/leaflet-geoman-free";
 import {
   forwardRef,
   useEffect,
@@ -41,13 +41,28 @@ const MapCanvas = forwardRef<MapCanvasHandle, Props>(function MapCanvas(
   const { t } = useTranslation();
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<L.Map | null>(null);
-  const drawnItemsRef = useRef<L.FeatureGroup | null>(null);
+  const farmLayerRef = useRef<L.Layer | null>(null);
   const reportsLayerRef = useRef<L.LayerGroup | null>(null);
   const radiusLayerRef = useRef<L.Circle | null>(null);
   const onPolygonChangeRef = useRef(onPolygonChange);
   onPolygonChangeRef.current = onPolygonChange;
 
-  // Map + draw control setup — runs once.
+  const extractLatLngs = (layer: L.Layer): LatLng[] => {
+    const latlngs = (layer as L.Polygon).getLatLngs()[0] as L.LatLng[];
+    return latlngs.map((p) => ({ lat: p.lat, lng: p.lng }));
+  };
+
+  const removeFarmLayer = () => {
+    if (farmLayerRef.current && mapRef.current) {
+      mapRef.current.removeLayer(farmLayerRef.current);
+    }
+    farmLayerRef.current = null;
+  };
+
+  // Map + Geoman draw control setup — runs once. Geoman (unlike
+  // Leaflet.draw) tracks its own internal drawing state per-map and
+  // re-enables cleanly after a shape is finished or removed, which is what
+  // was getting stuck on mobile browsers before.
   useEffect(() => {
     if (!containerRef.current || mapRef.current) return;
 
@@ -61,57 +76,57 @@ const MapCanvas = forwardRef<MapCanvasHandle, Props>(function MapCanvas(
         '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
     }).addTo(map);
 
-    const drawnItems = new L.FeatureGroup();
-    map.addLayer(drawnItems);
-    drawnItemsRef.current = drawnItems;
-
     const reportsLayer = L.layerGroup().addTo(map);
     reportsLayerRef.current = reportsLayer;
 
-    const drawControl = new (L.Control as any).Draw({
+    const pm = (map as any).pm;
+
+    // Only the polygon tool + edit/drag/remove — everything else hidden.
+    pm.addControls({
       position: "topleft",
-      draw: {
-        polygon: {
-          allowIntersection: false,
-          showArea: true,
-          shapeOptions: { color: "#8cc63f", weight: 2, fillOpacity: 0.12 },
-        },
-        polyline: false,
-        rectangle: false,
-        circle: false,
-        circlemarker: false,
-        marker: false,
-      },
-      edit: {
-        featureGroup: drawnItems,
-        remove: true,
-      },
-    });
-    map.addControl(drawControl);
-
-    const extractLatLngs = (layer: L.Layer): LatLng[] => {
-      const latlngs = (layer as L.Polygon).getLatLngs()[0] as L.LatLng[];
-      return latlngs.map((p) => ({ lat: p.lat, lng: p.lng }));
-    };
-
-    map.on((L as any).Draw.Event.CREATED, (e: any) => {
-      drawnItems.clearLayers(); // only one farm boundary at a time
-      const layer = e.layer;
-      drawnItems.addLayer(layer);
-      onPolygonChangeRef.current(extractLatLngs(layer));
+      drawMarker: false,
+      drawCircleMarker: false,
+      drawPolyline: false,
+      drawRectangle: false,
+      drawCircle: false,
+      drawText: false,
+      drawPolygon: true,
+      editMode: true,
+      dragMode: true,
+      cutPolygon: false,
+      removalMode: true,
+      rotateMode: false,
     });
 
-    map.on((L as any).Draw.Event.EDITED, (e: any) => {
-      const layers = e.layers as L.LayerGroup;
-      let coords: LatLng[] | null = null;
-      layers.eachLayer((layer: L.Layer) => {
-        coords = extractLatLngs(layer);
+    // Global options tuned for touch drawing: snapping is switched off so
+    // a tap landing near the start vertex on a small phone screen doesn't
+    // prematurely auto-close the polygon after just a couple of points.
+    // Shapes are finished either by tapping the first vertex deliberately
+    // or via the "Finish" action button Geoman shows automatically while
+    // drawing — not by a double-tap gesture, which is unreliable on touch.
+    pm.setGlobalOptions({
+      snappable: false,
+      allowSelfIntersection: false,
+      templineStyle: { color: "#8cc63f" },
+      hintlineStyle: { color: "#8cc63f", dashArray: [4, 4] },
+      pathOptions: { color: "#8cc63f", weight: 2, fillOpacity: 0.12 },
+    });
+
+    map.on("pm:create", (e: any) => {
+      // Only one farm boundary at a time — replace any existing shape.
+      removeFarmLayer();
+      farmLayerRef.current = e.layer;
+      e.layer.on("pm:edit", () => {
+        onPolygonChangeRef.current(extractLatLngs(e.layer));
       });
-      if (coords) onPolygonChangeRef.current(coords);
-    });
-
-    map.on((L as any).Draw.Event.DELETED, () => {
-      onPolygonChangeRef.current(null);
+      e.layer.on("pm:dragend", () => {
+        onPolygonChangeRef.current(extractLatLngs(e.layer));
+      });
+      e.layer.on("pm:remove", () => {
+        farmLayerRef.current = null;
+        onPolygonChangeRef.current(null);
+      });
+      onPolygonChangeRef.current(extractLatLngs(e.layer));
     });
 
     mapRef.current = map;
@@ -120,13 +135,19 @@ const MapCanvas = forwardRef<MapCanvasHandle, Props>(function MapCanvas(
       map.remove();
       mapRef.current = null;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Expose imperative clear() to the parent's "clear & redraw" button.
   useImperativeHandle(ref, () => ({
     clear: () => {
-      drawnItemsRef.current?.clearLayers();
-      radiusLayerRef.current = null;
+      const map = mapRef.current;
+      removeFarmLayer();
+      if (map) {
+        const pm = (map as any).pm;
+        // Make sure Geoman isn't left mid-draw from a previous attempt.
+        pm.Draw?.Polygon?.disable();
+      }
       onPolygonChangeRef.current(null);
     },
   }));
