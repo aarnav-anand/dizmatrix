@@ -2,9 +2,11 @@ import L from "leaflet";
 import "@geoman-io/leaflet-geoman-free";
 import {
   forwardRef,
+  useCallback,
   useEffect,
   useImperativeHandle,
   useRef,
+  useState,
 } from "react";
 import { useTranslation } from "react-i18next";
 import { reportMarkerLevel } from "../lib/risk";
@@ -22,6 +24,7 @@ const LEVEL_HEX: Record<RiskLevel, string> = {
 // map opens somewhere useful before a farm is drawn.
 const DEFAULT_CENTER: LatLng = { lat: 22.11, lng: 73.18 };
 const DEFAULT_ZOOM = 13;
+const LOCATE_ZOOM = 15;
 
 export interface MapCanvasHandle {
   clear: () => void;
@@ -44,6 +47,9 @@ const MapCanvas = forwardRef<MapCanvasHandle, Props>(function MapCanvas(
   const farmLayerRef = useRef<L.Layer | null>(null);
   const reportsLayerRef = useRef<L.LayerGroup | null>(null);
   const radiusLayerRef = useRef<L.Circle | null>(null);
+  const locationLayerRef = useRef<L.LayerGroup | null>(null);
+  const [locating, setLocating] = useState(false);
+  const [locateError, setLocateError] = useState<string | null>(null);
   const onPolygonChangeRef = useRef(onPolygonChange);
   onPolygonChangeRef.current = onPolygonChange;
 
@@ -134,6 +140,7 @@ const MapCanvas = forwardRef<MapCanvasHandle, Props>(function MapCanvas(
     return () => {
       map.remove();
       mapRef.current = null;
+      locationLayerRef.current = null;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -223,9 +230,76 @@ const MapCanvas = forwardRef<MapCanvasHandle, Props>(function MapCanvas(
     }
   }, [scoredReports, t]);
 
+  // Centre the map on the browser's reported position, marking it with a dot
+  // plus a circle showing the accuracy radius.
+  const handleLocate = useCallback(() => {
+    const map = mapRef.current;
+    if (!map) return;
+
+    if (!navigator.geolocation) {
+      setLocateError(t("map.locateUnsupported"));
+      return;
+    }
+
+    setLocateError(null);
+    setLocating(true);
+
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        setLocating(false);
+        if (!mapRef.current) return;
+
+        const { latitude, longitude, accuracy } = position.coords;
+
+        if (locationLayerRef.current) {
+          mapRef.current.removeLayer(locationLayerRef.current);
+        }
+
+        const layer = L.layerGroup([
+          L.circleMarker([latitude, longitude], {
+            radius: 6,
+            color: "#4f8ec7",
+            weight: 2,
+            fillColor: "#4f8ec7",
+            fillOpacity: 0.9,
+          }),
+          L.circle([latitude, longitude], {
+            radius: Math.max(accuracy, 30),
+            color: "#4f8ec7",
+            weight: 1,
+            fillOpacity: 0.08,
+          }),
+        ]).addTo(mapRef.current);
+        locationLayerRef.current = layer;
+
+        mapRef.current.setView([latitude, longitude], LOCATE_ZOOM);
+      },
+      (error) => {
+        setLocating(false);
+        setLocateError(
+          error.code === error.PERMISSION_DENIED
+            ? t("map.locateDenied")
+            : t("map.locateFailed")
+        );
+      },
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 }
+    );
+  }, [t]);
+
   return (
     <div className="map-area">
       <div ref={containerRef} className="leaflet-map" role="application" />
+      <div className="map-locate">
+        <button
+          type="button"
+          className="btn btn-locate"
+          onClick={handleLocate}
+          disabled={locating}
+        >
+          {locating ? t("map.locating") : t("map.locate")}
+        </button>
+        {locateError && <p className="map-locate-error">{locateError}</p>}
+      </div>
       <Legend />
     </div>
   );

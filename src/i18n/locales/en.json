@@ -8,7 +8,12 @@
     "instructionsShort": "Draw your field boundary to begin",
     "redraw": "Clear & redraw",
     "editHint": "Tap the polygon icon, then tap each corner of your field. Tap the first corner again, or use the Finish button, to close the shape.",
-    "attribution": "Map data"
+    "attribution": "Map data",
+    "locate": "Locate me",
+    "locating": "Finding you…",
+    "locateDenied": "Location permission denied. Allow location access to use this.",
+    "locateFailed": "Couldn't get your location. Try again.",
+    "locateUnsupported": "This browser doesn't support location."
   },
   "controls": {
     "searchRadius": "Search radius",
