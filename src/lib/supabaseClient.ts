@@ -33,53 +33,28 @@ export async function loginWithDifCode(code: string): Promise<Farmer | null> {
 /** Decrement the dizmatrix counter for a farmer by 1 and return updated count. */
 export async function decrementScanCredit(
   farmerId: number
-): Promise<number> {
-  // Get the current count
-  const { data: current, error: fetchError } = await supabase
+): Promise<number | null> {
+  // First get current value
+  const { data: current, error: fetchErr } = await supabase
     .from("farmers")
     .select("dizmatrix")
     .eq("id", farmerId)
     .single();
 
-  if (fetchError) {
-    console.error("Failed to get current scan count:", fetchError);
-    throw fetchError;
-  }
+  if (fetchErr || !current) return null;
 
-  if (!current) {
-    throw new Error("Farmer not found");
-  }
+  const newCount = Math.max(0, (current.dizmatrix ?? 0) - 1);
 
-  const currentCount = Number(current.dizmatrix ?? 0);
-
-  if (currentCount <= 0) {
-    throw new Error("No scans remaining");
-  }
-
-  const newCount = currentCount - 1;
-
-  // Update Supabase
-  const { data, error: updateError } = await supabase
+  const { data, error } = await supabase
     .from("farmers")
     .update({ dizmatrix: newCount })
     .eq("id", farmerId)
     .select("dizmatrix")
     .single();
 
-  if (updateError) {
-    console.error("Failed to decrement scan count:", updateError);
-    throw updateError;
-  }
+  if (error || !data) return null;
 
-  if (!data) {
-    throw new Error("Supabase did not return the updated scan count");
-  }
-
-  const updatedCount = Number(data.dizmatrix);
-
-  console.log("Scan count updated:", updatedCount);
-
-  return updatedCount;
+  return (data as any).dizmatrix as number;
 }
 
 /**
