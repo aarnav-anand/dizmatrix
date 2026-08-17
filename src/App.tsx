@@ -35,48 +35,23 @@ export default function App() {
   const [rawReports, setRawReports] = useState<DiseaseReport[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [runToken, setRunToken] = useState(0);
 
   // Sync credits from farmer on login
   useEffect(() => {
-    if (farmer) setCredits(farmer.dizmatrix ?? 0);
+    if (farmer) {
+      setCredits(farmer.dizmatrix ?? 0);
+    }
   }, [farmer]);
-
-  // Fetch reports whenever polygon / radius / run-token changes
-  useEffect(() => {
-    if (!farmPolygon || farmPolygon.length < 3) return;
-
-    let cancelled = false;
-    const timer = setTimeout(async () => {
-      setLoading(true);
-      setError(null);
-      try {
-        const c = centroid(farmPolygon);
-        const box = boundingBoxAround(c, radiusKm);
-        const reports = await fetchReportsInBoundingBox(box);
-        if (!cancelled) setRawReports(reports);
-      } catch (err) {
-        console.error(err);
-        if (!cancelled) setError(t("errors.fetchFailed"));
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    }, 250);
-
-    return () => {
-      cancelled = true;
-      clearTimeout(timer);
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [farmPolygon, radiusKm, runToken]);
 
   const scored: ScoredReport[] = useMemo(() => {
     if (!farmPolygon || farmPolygon.length < 3) return [];
+
     return scoreReports(rawReports, farmPolygon, radiusKm);
   }, [rawReports, farmPolygon, radiusKm]);
 
   const assessment: FarmAssessment | null = useMemo(() => {
     if (!farmPolygon || farmPolygon.length < 3) return null;
+
     return buildAssessment(scored, farmPolygon, radiusKm);
   }, [scored, farmPolygon, radiusKm]);
 
@@ -84,17 +59,57 @@ export default function App() {
     mapRef.current?.clear();
     setFarmPolygon(null);
     setRawReports([]);
+    setError(null);
   };
 
   const handleRun = async () => {
     if (!farmer) return;
-    if (credits <= 0) return;
 
-    // Decrement first, then trigger fetch
-    const updated = await decrementScanCredit(farmer.id);
-    if (updated !== null) setCredits(updated);
+    if (credits <= 0) {
+      setError("No scans remaining.");
+      return;
+    }
 
-    setRunToken((n) => n + 1);
+    if (!farmPolygon || farmPolygon.length < 3) {
+      setError("Please draw your farm area first.");
+      return;
+    }
+
+    setLoading(true);
+    setError(null);
+
+    try {
+      // 1. Calculate the search area
+      const c = centroid(farmPolygon);
+      const box = boundingBoxAround(c, radiusKm);
+
+      // 2. Fetch the disease outbreak data
+      const reports = await fetchReportsInBoundingBox(box);
+
+      // 3. Display the newly fetched results
+      setRawReports(reports);
+
+      // 4. ONLY AFTER THE SCAN/FETCH SUCCEEDS,
+      //    decrement the farmer's scan credit.
+      const updatedCredits = await decrementScanCredit(farmer.id);
+
+      // 5. Update the app with the value confirmed by Supabase.
+      setCredits(updatedCredits);
+
+      console.log(
+        `Scan completed successfully. Credits remaining: ${updatedCredits}`
+      );
+    } catch (err) {
+      console.error("Scan failed:", err);
+
+      setError(
+        err instanceof Error
+          ? err.message
+          : "The scan could not be completed."
+      );
+    } finally {
+      setLoading(false);
+    }
   };
 
   if (!farmer) {
@@ -106,6 +121,7 @@ export default function App() {
   return (
     <div className="app-shell">
       <Header credits={credits} farmerName={farmer.farmer_name} />
+
       <div className="app-body">
         <aside className="sidebar">
           <CreditBadge credits={credits} />
@@ -128,6 +144,7 @@ export default function App() {
                   type="button"
                   className="btn btn-ghost"
                   onClick={handleClear}
+                  disabled={loading}
                 >
                   {t("map.redraw")}
                 </button>
@@ -140,16 +157,25 @@ export default function App() {
                   disabled={loading}
                   onClick={handleRun}
                 >
-                  {loading ? t("controls.running") : t("controls.run")}
+                  {loading
+                    ? t("controls.running")
+                    : t("controls.run")}
                 </button>
               )}
 
-              {error && <p className="no-reports-note">{error}</p>}
+              {error && (
+                <p className="no-reports-note">
+                  {error}
+                </p>
+              )}
 
               {!farmPolygon && <EmptyState />}
 
               {farmPolygon && assessment && !loading && (
-                <RiskPanel assessment={assessment} radiusKm={radiusKm} />
+                <RiskPanel
+                  assessment={assessment}
+                  radiusKm={radiusKm}
+                />
               )}
             </>
           )}
