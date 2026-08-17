@@ -18,14 +18,6 @@ export interface Farmer {
   farmer_dif?: string;
 }
 
-export interface Farmer {
-  id: number;
-  dif_code: string;
-  dizmatrix: number;
-  farmer_name?: string;
-  farmer_dif?: string;
-}
-
 /** Validate a 4-char alphanumeric DIF code and return the farmer row. */
 export async function loginWithDifCode(code: string): Promise<Farmer | null> {
   const { data, error } = await supabase
@@ -39,7 +31,9 @@ export async function loginWithDifCode(code: string): Promise<Farmer | null> {
 }
 
 /** Decrement the dizmatrix counter for a farmer by 1 and return updated count. */
-export async function decrementScanCredit(farmerId: number): Promise<number | null> {
+export async function decrementScanCredit(
+  farmerId: number
+): Promise<number | null> {
   // First get current value
   const { data: current, error: fetchErr } = await supabase
     .from("farmers")
@@ -48,6 +42,7 @@ export async function decrementScanCredit(farmerId: number): Promise<number | nu
     .single();
 
   if (fetchErr || !current) return null;
+
   const newCount = Math.max(0, (current.dizmatrix ?? 0) - 1);
 
   const { data, error } = await supabase
@@ -58,12 +53,14 @@ export async function decrementScanCredit(farmerId: number): Promise<number | nu
     .single();
 
   if (error || !data) return null;
+
   return (data as any).dizmatrix as number;
 }
 
 /**
- * Fetch disease reports inside a rough lat/lng bounding box from the 'farmers' outbreak table.
- * The table matches the schema in the uploaded screenshot.
+ * Fetch disease outbreak reports inside a rough lat/lng bounding box.
+ *
+ * Disease outbreak data comes from the "outbreak_reports" table.
  */
 export async function fetchReportsInBoundingBox(bounds: {
   minLat: number;
@@ -72,7 +69,7 @@ export async function fetchReportsInBoundingBox(bounds: {
   maxLng: number;
 }): Promise<DiseaseReport[]> {
   const { data, error } = await supabase
-    .from("farmers")
+    .from("outbreak_reports")
     .select(
       "id, disease_class, crop, disease, confidence, farmer_name, farmer_dif, farm_geojson, center_lat, center_lng, notes, language, reported_at"
     )
@@ -83,9 +80,12 @@ export async function fetchReportsInBoundingBox(bounds: {
     .order("reported_at", { ascending: false })
     .limit(2000);
 
-  if (error) throw error;
+  if (error) {
+    console.error("Error fetching outbreak reports:", error);
+    throw error;
+  }
 
-  // Map table columns to DiseaseReport shape
+  // Map outbreak_reports columns to DiseaseReport shape
   return ((data ?? []) as any[]).map((row) => ({
     id: row.id,
     disease_class: row.disease_class ?? null,
