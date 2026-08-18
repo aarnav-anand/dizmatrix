@@ -20,11 +20,9 @@ function recencyWeight(reportedAt: string | null): number {
 function distanceWeight(distanceKm: number, insidePolygon: boolean, radiusKm: number): number {
   if (insidePolygon) return 1;
   if (distanceKm <= 0) return 1;
-  // Smooth falloff: full weight near the boundary, tapering to ~0.1 at the search radius.
-  const t = Math.min(distanceKm / radiusKm, 1);
-  return 0.15 + 0.85 * Math.pow(1 - t, 2);
+  // Absolute decay: a report 15km away always has the same weight
+  return 0.15 + 0.85 * Math.exp(-distanceKm / 20);
 }
-
 function levelFromScore(score: number): RiskLevel {
   if (score >= 70) return "critical";
   if (score >= 40) return "high";
