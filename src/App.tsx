@@ -33,6 +33,7 @@ export default function App() {
   const [farmPolygon, setFarmPolygon] = useState<LatLng[] | null>(null);
   const [radiusKm, setRadiusKm] = useState(10);
   const [rawReports, setRawReports] = useState<DiseaseReport[]>([]);
+  const [hasRun, setHasRun] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -57,6 +58,7 @@ export default function App() {
     mapRef.current?.clear();
     setFarmPolygon(null);
     setRawReports([]);
+    setHasRun(false);
   };
 
   const handleRun = async () => {
@@ -72,6 +74,7 @@ export default function App() {
       const box = boundingBoxAround(c, radiusKm);
       const reports = await fetchReportsInBoundingBox(box);
       setRawReports(reports);
+      setHasRun(true);
 
       // Scan completed successfully — now decrement the credit
       const updated = await decrementScanCredit(farmer.id);
@@ -152,7 +155,7 @@ export default function App() {
 
               {!farmPolygon && <EmptyState />}
 
-              {farmPolygon && assessment && !loading && (
+              {farmPolygon && hasRun && assessment && !loading && (
                 <RiskPanel assessment={assessment} radiusKm={radiusKm} />
               )}
             </>
