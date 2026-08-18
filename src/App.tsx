@@ -35,40 +35,13 @@ export default function App() {
   const [rawReports, setRawReports] = useState<DiseaseReport[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [runToken, setRunToken] = useState(0);
 
   // Sync credits from farmer on login
   useEffect(() => {
     if (farmer) setCredits(farmer.dizmatrix ?? 0);
   }, [farmer]);
 
-  // Fetch reports whenever polygon / radius / run-token changes
-  useEffect(() => {
-    if (!farmPolygon || farmPolygon.length < 3) return;
 
-    let cancelled = false;
-    const timer = setTimeout(async () => {
-      setLoading(true);
-      setError(null);
-      try {
-        const c = centroid(farmPolygon);
-        const box = boundingBoxAround(c, radiusKm);
-        const reports = await fetchReportsInBoundingBox(box);
-        if (!cancelled) setRawReports(reports);
-      } catch (err) {
-        console.error(err);
-        if (!cancelled) setError(t("errors.fetchFailed"));
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    }, 250);
-
-    return () => {
-      cancelled = true;
-      clearTimeout(timer);
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [farmPolygon, radiusKm, runToken]);
 
   const scored: ScoredReport[] = useMemo(() => {
     if (!farmPolygon || farmPolygon.length < 3) return [];
@@ -90,11 +63,25 @@ export default function App() {
     if (!farmer) return;
     if (credits <= 0) return;
 
-    // Decrement first, then trigger fetch
-    const updated = await decrementScanCredit(farmer.id);
-    if (updated !== null) setCredits(updated);
+    if (!farmPolygon || farmPolygon.length < 3) return;
 
-    setRunToken((n) => n + 1);
+    setLoading(true);
+    setError(null);
+    try {
+      const c = centroid(farmPolygon);
+      const box = boundingBoxAround(c, radiusKm);
+      const reports = await fetchReportsInBoundingBox(box);
+      setRawReports(reports);
+
+      // Scan completed successfully — now decrement the credit
+      const updated = await decrementScanCredit(farmer.id);
+      if (updated !== null) setCredits(updated);
+    } catch (err) {
+      console.error(err);
+      setError(t("errors.fetchFailed"));
+    } finally {
+      setLoading(false);
+    }
   };
 
   if (!farmer) {
@@ -109,6 +96,23 @@ export default function App() {
       <div className="app-body">
         <aside className="sidebar">
           <CreditBadge credits={credits} />
+
+          {creditsExhausted && (
+            <div className="instructions-card card" style={{ color: "var(--color-red-bright)", textAlign: "center" }}>
+              <p>
+                Please visit{" "}
+                <a
+                  href="https://agrifusion-hub.vercel.app"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{ color: "inherit", fontWeight: 600 }}
+                >
+                  agrifusion-hub.vercel.app
+                </a>{" "}
+                to purchase more credits.
+              </p>
+            </div>
+          )}
 
           {!creditsExhausted && (
             <>

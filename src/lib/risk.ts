@@ -41,6 +41,10 @@ export function scoreReports(
 
   return reports
     .filter((r) => Number.isFinite(r.latitude) && Number.isFinite(r.longitude))
+    .filter((r) => {
+      const diseaseName = (r.disease ?? r.disease_class ?? "").toLowerCase();
+      return !diseaseName.includes("healthy");
+    })
     .map((r): ScoredReport => {
       const point: LatLng = { lat: r.latitude, lng: r.longitude };
       const inside = farmPolygon.length >= 3 ? isPointInPolygon(point, farmPolygon) : false;

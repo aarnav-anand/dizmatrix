@@ -82,10 +82,6 @@ export default function RiskPanel({ assessment, radiusKm }: Props) {
                   )}
                 </div>
                 <div>
-                  {t("results.avgConfidence")}:{" "}
-                  <span className="value">{Math.round(d.avgConfidence * 100)}%</span>
-                </div>
-                <div>
                   {t("results.lastSeen")}:{" "}
                   <span className="value">
                     {d.mostRecent ? new Date(d.mostRecent).toLocaleDateString() : "—"}
