@@ -67,6 +67,7 @@
   },
   "errors": {
     "fetchFailed": "Couldn't reach the report database. Check your connection and try again.",
-    "needPolygon": "Draw a field boundary first."
+    "needPolygon": "Draw a field boundary first.",
+    "polygonOnWater": "Your field boundary appears to be drawn over water. No credit has been deducted — please clear the shape and redraw it over your actual farmland."
   }
 }

@@ -83,3 +83,87 @@ export function boundingBoxAround(center: LatLng, radiusKm: number) {
     maxLng: center.lng + lngPad,
   };
 }
+
+/**
+ * OSM Nominatim feature classes / types that indicate a water body.
+ * The reverse-geocode endpoint returns `{ class, type, ... }` for the
+ * nearest named feature.  If the dominant feature is water we reject the
+ * polygon so the user is asked to redraw on land.
+ */
+const WATER_CLASSES = new Set(["waterway", "water", "natural"]);
+const WATER_TYPES = new Set([
+  "water",
+  "sea",
+  "ocean",
+  "bay",
+  "strait",
+  "river",
+  "stream",
+  "canal",
+  "lake",
+  "reservoir",
+  "pond",
+  "lagoon",
+  "wetland",
+  "coastline",
+]);
+
+async function reverseGeocode(
+  point: LatLng
+): Promise<{ class: string; type: string } | null> {
+  try {
+    const url =
+      `https://nominatim.openstreetmap.org/reverse` +
+      `?lat=${point.lat}&lon=${point.lng}` +
+      `&format=jsonv2&zoom=10`;
+    const res = await fetch(url, {
+      headers: { "Accept-Language": "en" },
+    });
+    if (!res.ok) return null;
+    const json = await res.json();
+    return { class: json.class ?? "", type: json.type ?? "" };
+  } catch {
+    return null;
+  }
+}
+
+function isWaterFeature(feature: { class: string; type: string }): boolean {
+  return (
+    WATER_CLASSES.has(feature.class) && WATER_TYPES.has(feature.type)
+  );
+}
+
+/**
+ * Returns `true` when the **majority** of sampled polygon points appear to
+ * fall on a water body according to OSM Nominatim reverse-geocoding.
+ *
+ * We sample the centroid plus up to four evenly-spaced vertices.  If most
+ * sampled points resolve to a water feature the polygon is considered to be
+ * on water.  On network failure we return `false` (fail open) so a
+ * connectivity issue never permanently blocks the user.
+ */
+export async function isPolygonOnWater(polygon: LatLng[]): Promise<boolean> {
+  if (polygon.length < 3) return false;
+
+  const c = centroid(polygon);
+
+  // Pick up to 4 evenly-spaced vertices in addition to the centroid.
+  const step = Math.max(1, Math.floor(polygon.length / 4));
+  const sampleVertices: LatLng[] = [];
+  for (let i = 0; i < polygon.length && sampleVertices.length < 4; i += step) {
+    sampleVertices.push(polygon[i]);
+  }
+
+  const points: LatLng[] = [c, ...sampleVertices];
+
+  // Run all requests concurrently.
+  const results = await Promise.all(points.map(reverseGeocode));
+
+  const valid = results.filter((r): r is { class: string; type: string } => r !== null);
+  if (valid.length === 0) return false; // network failure — fail open
+
+  const waterCount = valid.filter(isWaterFeature).length;
+
+  // Majority rule: more than half the successfully-resolved points are water.
+  return waterCount > valid.length / 2;
+}

@@ -7,7 +7,7 @@ import CreditBadge from "./components/CreditBadge";
 import MapCanvas, { type MapCanvasHandle } from "./components/MapCanvas";
 import RadiusControl from "./components/RadiusControl";
 import RiskPanel from "./components/RiskPanel";
-import { boundingBoxAround, centroid } from "./lib/geo";
+import { boundingBoxAround, centroid, isPolygonOnWater } from "./lib/geo";
 import {
   fetchReportsInBoundingBox,
   decrementScanCredit,
@@ -70,13 +70,20 @@ export default function App() {
     setLoading(true);
     setError(null);
     try {
+      // Water check — must pass before any credit is consumed.
+      const onWater = await isPolygonOnWater(farmPolygon);
+      if (onWater) {
+        setError(t("errors.polygonOnWater"));
+        return; // Do NOT decrement credit — user must redraw on land.
+      }
+
       const c = centroid(farmPolygon);
       const box = boundingBoxAround(c, radiusKm);
       const reports = await fetchReportsInBoundingBox(box);
       setRawReports(reports);
       setHasRun(true);
 
-      // Scan completed successfully — now decrement the credit
+      // Scan completed successfully — now decrement the credit.
       const updated = await decrementScanCredit(farmer.id);
       if (updated !== null) setCredits(updated);
     } catch (err) {
