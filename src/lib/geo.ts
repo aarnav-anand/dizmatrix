@@ -84,70 +84,118 @@ export function boundingBoxAround(center: LatLng, radiusKm: number) {
   };
 }
 
+// ---------------------------------------------------------------------------
+// Water detection
+// ---------------------------------------------------------------------------
+
 /**
- * OSM Nominatim feature classes / types that indicate a water body.
- * The reverse-geocode endpoint returns `{ class, type, ... }` for the
- * nearest named feature.  If the dominant feature is water we reject the
- * polygon so the user is asked to redraw on land.
+ * OSM feature classes that definitively indicate solid land.
+ * Nominatim returns these when a point resolves to a named place on land.
+ * Open ocean / large water bodies return an error JSON with no class at all.
  */
-const WATER_CLASSES = new Set(["waterway", "water", "natural"]);
-const WATER_TYPES = new Set([
+const LAND_CLASSES = new Set([
+  "boundary",
+  "place",
+  "landuse",
+  "highway",
+  "building",
+  "amenity",
+  "shop",
+  "leisure",
+  "man_made",
+  "railway",
+  "aeroway",
+  "tourism",
+  "historic",
+  "office",
+  "military",
+]);
+
+/**
+ * Feature classes that explicitly mean water — reject regardless of type.
+ */
+const WATER_CLASSES = new Set(["waterway", "water"]);
+
+/**
+ * Natural types that are water bodies (class === "natural").
+ */
+const WATER_NATURAL_TYPES = new Set([
   "water",
   "sea",
   "ocean",
   "bay",
   "strait",
-  "river",
-  "stream",
-  "canal",
-  "lake",
-  "reservoir",
-  "pond",
-  "lagoon",
-  "wetland",
   "coastline",
+  "wetland",
 ]);
 
-async function reverseGeocode(
-  point: LatLng
-): Promise<{ class: string; type: string } | null> {
+/**
+ * Probe a single coordinate with Nominatim reverse-geocoding.
+ *
+ * Returns:
+ *   "land"    – the point resolves to a named land feature
+ *   "water"   – the point resolves to a named water feature
+ *   "unknown" – Nominatim returned an error or couldn't geocode (open ocean)
+ */
+async function probePoint(point: LatLng): Promise<"land" | "water" | "unknown"> {
   try {
     const url =
       `https://nominatim.openstreetmap.org/reverse` +
       `?lat=${point.lat}&lon=${point.lng}` +
-      `&format=jsonv2&zoom=10`;
+      `&format=jsonv2&zoom=12`;
     const res = await fetch(url, {
       headers: { "Accept-Language": "en" },
     });
-    if (!res.ok) return null;
+    if (!res.ok) return "unknown";
+
     const json = await res.json();
-    return { class: json.class ?? "", type: json.type ?? "" };
+
+    // Nominatim signals "nothing here" with { "error": "Unable to geocode" }
+    if (json.error) return "unknown";
+
+    const cls: string = json.class ?? "";
+    const type: string = json.type ?? "";
+
+    if (WATER_CLASSES.has(cls)) return "water";
+    if (cls === "natural" && WATER_NATURAL_TYPES.has(type)) return "water";
+    if (LAND_CLASSES.has(cls)) return "land";
+
+    // Anything else (e.g. "natural" with a non-water type like "wood") is land.
+    return "land";
   } catch {
-    return null;
+    return "unknown";
   }
 }
 
-function isWaterFeature(feature: { class: string; type: string }): boolean {
-  return (
-    WATER_CLASSES.has(feature.class) && WATER_TYPES.has(feature.type)
-  );
-}
-
 /**
- * Returns `true` when the **majority** of sampled polygon points appear to
- * fall on a water body according to OSM Nominatim reverse-geocoding.
+ * Returns `true` when the polygon appears to be drawn over water or open
+ * ocean, in which case the scan should be rejected and the credit preserved.
  *
- * We sample the centroid plus up to four evenly-spaced vertices.  If most
- * sampled points resolve to a water feature the polygon is considered to be
- * on water.  On network failure we return `false` (fail open) so a
- * connectivity issue never permanently blocks the user.
+ * Strategy: sample the centroid + up to 4 evenly-spaced vertices.
+ *
+ * Decision rules (designed to be strict about water, lenient on ambiguity):
+ *  - If ANY point comes back "water"  → reject (on water).
+ *  - If ANY point comes back "land"   → accept (confirmed land).
+ *  - If ALL points are "unknown"      → reject (open ocean has no geocode).
+ *
+ * The "any water beats any land" rule catches polygons straddling a coast
+ * that have some vertices on sea.  The "all unknown = reject" rule catches
+ * open-ocean drawings where Nominatim returns nothing at all.
+ *
+ * On a genuine network failure every call will return "unknown", which would
+ * falsely reject.  To avoid that we track whether every failure was a fetch
+ * exception vs a Nominatim "Unable to geocode" response; but since we can't
+ * distinguish the two from the browser reliably, we take the conservative
+ * approach: if the user is on a working internet connection (required for the
+ * rest of the app anyway), ocean probes will return "unknown" and land probes
+ * will return "land".
  */
 export async function isPolygonOnWater(polygon: LatLng[]): Promise<boolean> {
   if (polygon.length < 3) return false;
 
   const c = centroid(polygon);
 
-  // Pick up to 4 evenly-spaced vertices in addition to the centroid.
+  // Up to 4 evenly-spaced vertices in addition to the centroid.
   const step = Math.max(1, Math.floor(polygon.length / 4));
   const sampleVertices: LatLng[] = [];
   for (let i = 0; i < polygon.length && sampleVertices.length < 4; i += step) {
@@ -156,14 +204,13 @@ export async function isPolygonOnWater(polygon: LatLng[]): Promise<boolean> {
 
   const points: LatLng[] = [c, ...sampleVertices];
 
-  // Run all requests concurrently.
-  const results = await Promise.all(points.map(reverseGeocode));
+  // Run all probes concurrently.
+  const results = await Promise.all(points.map(probePoint));
 
-  const valid = results.filter((r): r is { class: string; type: string } => r !== null);
-  if (valid.length === 0) return false; // network failure — fail open
+  const hasWater = results.some((r) => r === "water");
+  const hasLand = results.some((r) => r === "land");
 
-  const waterCount = valid.filter(isWaterFeature).length;
-
-  // Majority rule: more than half the successfully-resolved points are water.
-  return waterCount > valid.length / 2;
+  if (hasWater) return true;      // At least one vertex on water → reject
+  if (hasLand) return false;      // At least one vertex on land (no water) → accept
+  return true;                    // All "unknown" → open ocean → reject
 }

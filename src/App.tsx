@@ -35,6 +35,7 @@ export default function App() {
   const [rawReports, setRawReports] = useState<DiseaseReport[]>([]);
   const [hasRun, setHasRun] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [checkingLocation, setCheckingLocation] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   // Sync credits from farmer on login
@@ -68,10 +69,12 @@ export default function App() {
     if (!farmPolygon || farmPolygon.length < 3) return;
 
     setLoading(true);
+    setCheckingLocation(true);
     setError(null);
     try {
       // Water check — must pass before any credit is consumed.
       const onWater = await isPolygonOnWater(farmPolygon);
+      setCheckingLocation(false);
       if (onWater) {
         setError(t("errors.polygonOnWater"));
         return; // Do NOT decrement credit — user must redraw on land.
@@ -91,6 +94,7 @@ export default function App() {
       setError(t("errors.fetchFailed"));
     } finally {
       setLoading(false);
+      setCheckingLocation(false);
     }
   };
 
@@ -154,7 +158,11 @@ export default function App() {
                   disabled={loading}
                   onClick={handleRun}
                 >
-                  {loading ? t("controls.running") : t("controls.run")}
+                  {checkingLocation
+                    ? t("controls.checkingLocation")
+                    : loading
+                    ? t("controls.running")
+                    : t("controls.run")}
                 </button>
               )}
 

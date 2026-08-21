@@ -29,6 +29,7 @@
     "km": "km",
     "language": "Language",
     "run": "Run risk assessment",
+    "checkingLocation": "Verifying field location…",
     "running": "Checking nearby reports…"
   },
   "empty": {
