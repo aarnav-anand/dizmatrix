@@ -171,46 +171,52 @@ async function probePoint(point: LatLng): Promise<"land" | "water" | "unknown"> 
  * Returns `true` when the polygon appears to be drawn over water or open
  * ocean, in which case the scan should be rejected and the credit preserved.
  *
- * Strategy: sample the centroid + up to 4 evenly-spaced vertices.
+ * Strategy: sample the centroid + up to 8 evenly-spaced vertices (9 points
+ * total), then use a weighted majority vote.
  *
- * Decision rules (designed to be strict about water, lenient on ambiguity):
- *  - If ANY point comes back "water"  → reject (on water).
- *  - If ANY point comes back "land"   → accept (confirmed land).
- *  - If ALL points are "unknown"      → reject (open ocean has no geocode).
+ * The centroid is the most representative single point, so it gets 2 votes.
+ * Each vertex probe gets 1 vote.  "unknown" (= open ocean / ungeocodable) is
+ * counted as water.
  *
- * The "any water beats any land" rule catches polygons straddling a coast
- * that have some vertices on sea.  The "all unknown = reject" rule catches
- * open-ocean drawings where Nominatim returns nothing at all.
+ * Rejection threshold: strictly more than half of total votes are water.
  *
- * On a genuine network failure every call will return "unknown", which would
- * falsely reject.  To avoid that we track whether every failure was a fetch
- * exception vs a Nominatim "Unable to geocode" response; but since we can't
- * distinguish the two from the browser reliably, we take the conservative
- * approach: if the user is on a working internet connection (required for the
- * rest of the app anyway), ocean probes will return "unknown" and land probes
- * will return "land".
+ * This handles three cases correctly:
+ *  - Open ocean: all probes → "unknown" → all votes water → reject.
+ *  - Lake / river: most probes → "water", maybe 1-2 shoreline vertices →
+ *    "land", but water votes win the majority → reject.
+ *  - Farmland: all/most probes → "land" → land votes win → accept.
+ *  - Coastal farm (mostly land with water edge): land votes win → accept.
  */
 export async function isPolygonOnWater(polygon: LatLng[]): Promise<boolean> {
   if (polygon.length < 3) return false;
 
   const c = centroid(polygon);
 
-  // Up to 4 evenly-spaced vertices in addition to the centroid.
-  const step = Math.max(1, Math.floor(polygon.length / 4));
+  // Up to 8 evenly-spaced vertices in addition to the centroid.
+  const step = Math.max(1, Math.floor(polygon.length / 8));
   const sampleVertices: LatLng[] = [];
-  for (let i = 0; i < polygon.length && sampleVertices.length < 4; i += step) {
+  for (let i = 0; i < polygon.length && sampleVertices.length < 8; i += step) {
     sampleVertices.push(polygon[i]);
   }
 
-  const points: LatLng[] = [c, ...sampleVertices];
-
   // Run all probes concurrently.
-  const results = await Promise.all(points.map(probePoint));
+  const [centroidResult, ...vertexResults] = await Promise.all(
+    [c, ...sampleVertices].map(probePoint)
+  );
 
-  const hasWater = results.some((r) => r === "water");
-  const hasLand = results.some((r) => r === "land");
+  // Centroid counts double — it is the most representative point.
+  // "unknown" is treated as water (open ocean / ungeocodable = not farmland).
+  let waterVotes = 0;
+  let landVotes = 0;
 
-  if (hasWater) return true;      // At least one vertex on water → reject
-  if (hasLand) return false;      // At least one vertex on land (no water) → accept
-  return true;                    // All "unknown" → open ocean → reject
+  const tally = (result: "land" | "water" | "unknown", weight: number) => {
+    if (result === "land") landVotes += weight;
+    else waterVotes += weight; // "water" or "unknown" both count as water
+  };
+
+  tally(centroidResult, 2);
+  for (const r of vertexResults) tally(r, 1);
+
+  // Reject when water votes are strictly more than half the total.
+  return waterVotes > landVotes;
 }
