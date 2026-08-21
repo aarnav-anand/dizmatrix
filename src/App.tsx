@@ -36,7 +36,7 @@ export default function App() {
   const [hasRun, setHasRun] = useState(false);
   const [loading, setLoading] = useState(false);
   const [checkingLocation, setCheckingLocation] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [errorKey, setErrorKey] = useState<string | null>(null);
 
   // Sync credits from farmer on login
   useEffect(() => {
@@ -60,6 +60,7 @@ export default function App() {
     setFarmPolygon(null);
     setRawReports([]);
     setHasRun(false);
+    setErrorKey(null);
   };
 
   const handleRun = async () => {
@@ -70,13 +71,13 @@ export default function App() {
 
     setLoading(true);
     setCheckingLocation(true);
-    setError(null);
+    setErrorKey(null);
     try {
       // Water check — must pass before any credit is consumed.
       const onWater = await isPolygonOnWater(farmPolygon);
       setCheckingLocation(false);
       if (onWater) {
-        setError(t("errors.polygonOnWater"));
+        setErrorKey("errors.polygonOnWater");
         return; // Do NOT decrement credit — user must redraw on land.
       }
 
@@ -91,7 +92,7 @@ export default function App() {
       if (updated !== null) setCredits(updated);
     } catch (err) {
       console.error(err);
-      setError(t("errors.fetchFailed"));
+      setErrorKey("errors.fetchFailed");
     } finally {
       setLoading(false);
       setCheckingLocation(false);
@@ -166,7 +167,7 @@ export default function App() {
                 </button>
               )}
 
-              {error && <p className="no-reports-note">{error}</p>}
+              {errorKey && <p className="no-reports-note">{t(errorKey)}</p>}
 
               {!farmPolygon && <EmptyState />}
 
