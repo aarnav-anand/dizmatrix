@@ -15,7 +15,8 @@
   "credits": {
     "remaining": "स्कैन बचे",
     "exhausted": "क्रेडिट समाप्त हो गए",
-    "purchase": "AgriFusion से और स्कैन खरीदें →"
+    "purchase": "AgriFusion से और स्कैन खरीदें →",
+    "purchaseMessage": "कृपया अधिक क्रेडिट खरीदने के लिए agrifusion-hub.vercel.app पर जाएं।"
   },
   "map": {
     "instructions": "अपने खेत की सीमा बनाने के लिए मानचित्र पर बहुभुज (पॉलीगन) टूल का उपयोग करें।",
@@ -56,7 +57,8 @@
     "humidity": "आर्द्रता",
     "precipitation": "वर्षा",
     "weatherRisks": "पूर्वानुमान में अनुकूल परिस्थितियों वाली बीमारियां",
-    "daysOfFavorableConditions": "अनुकूल दिन"
+    "daysOfFavorableConditions": "अनुकूल दिन",
+    "weatherBoost": "मौसम की स्थितियों से जोखिम में वृद्धि"
   },
   "risk": {
     "low": "कम",

@@ -126,7 +126,8 @@ export default function App() {
           {creditsExhausted && (
             <div className="instructions-card card" style={{ color: "var(--color-red-bright)", textAlign: "center" }}>
               <p>
-                Please visit{" "}
+                {t("credits.purchaseMessage")} 
+                <br />
                 <a
                   href="https://agrifusion-hub.vercel.app"
                   target="_blank"
@@ -134,8 +135,7 @@ export default function App() {
                   style={{ color: "inherit", fontWeight: 600 }}
                 >
                   agrifusion-hub.vercel.app
-                </a>{" "}
-                to purchase more credits.
+                </a>
               </p>
             </div>
           )}

@@ -15,7 +15,8 @@
   "credits": {
     "remaining": "scans left",
     "exhausted": "Credits exhausted",
-    "purchase": "Purchase more scans from AgriFusion →"
+    "purchase": "Purchase more scans from AgriFusion →",
+    "purchaseMessage": "Please visit agrifusion-hub.vercel.app to purchase more credits."
   },
   "map": {
     "instructions": "Use the polygon tool on the map to trace your field boundary.",
@@ -56,7 +57,8 @@
     "humidity": "Humidity",
     "precipitation": "Precipitation",
     "weatherRisks": "Diseases with favorable conditions in forecast",
-    "daysOfFavorableConditions": "days favorable"
+    "daysOfFavorableConditions": "days favorable",
+    "weatherBoost": "risk boost from weather conditions"
   },
   "risk": {
     "low": "Low",

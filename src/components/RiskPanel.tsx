@@ -113,7 +113,7 @@ export default function RiskPanel({ assessment, radiusKm }: Props) {
               {/* Weather boost indicator */}
               {d.weatherBoost && d.weatherBoost > 0 && (
                 <div className="weather-boost-indicator">
-                  🌡️ +{d.weatherBoost}% risk boost from weather conditions
+                  🌡️ +{d.weatherBoost}% {t("results.weatherBoost")}
                 </div>
               )}
 
