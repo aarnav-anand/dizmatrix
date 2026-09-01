@@ -40,7 +40,7 @@ export interface WeatherForecast {
 export interface EpidemiologicalRisk {
   name: string; // Common disease name
   scientificName?: string;
-  severity: "low" | "medium" | "high";
+  severity: "low" | "moderate" | "high" | "critical";
   conditions: {
     idealTemperatureMin: number;
     idealTemperatureMax: number;
