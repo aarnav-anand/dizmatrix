@@ -8,6 +8,7 @@ import MapCanvas, { type MapCanvasHandle } from "./components/MapCanvas";
 import RadiusControl from "./components/RadiusControl";
 import RiskPanel from "./components/RiskPanel";
 import { boundingBoxAround, centroid, isPolygonOnWater } from "./lib/geo";
+import { fetchWeatherForecast } from "./lib/weather";
 import {
   fetchReportsInBoundingBox,
   decrementScanCredit,
@@ -19,6 +20,7 @@ import type {
   FarmAssessment,
   LatLng,
   ScoredReport,
+  WeatherForecast,
 } from "./types";
 
 export default function App() {
@@ -33,6 +35,7 @@ export default function App() {
   const [farmPolygon, setFarmPolygon] = useState<LatLng[] | null>(null);
   const [radiusKm, setRadiusKm] = useState(10);
   const [rawReports, setRawReports] = useState<DiseaseReport[]>([]);
+  const [weatherForecast, setWeatherForecast] = useState<WeatherForecast | null>(null);
   const [hasRun, setHasRun] = useState(false);
   const [loading, setLoading] = useState(false);
   const [checkingLocation, setCheckingLocation] = useState(false);
@@ -52,13 +55,14 @@ export default function App() {
 
   const assessment: FarmAssessment | null = useMemo(() => {
     if (!farmPolygon || farmPolygon.length < 3) return null;
-    return buildAssessment(scored, farmPolygon, radiusKm);
-  }, [scored, farmPolygon, radiusKm]);
+    return buildAssessment(scored, farmPolygon, radiusKm, weatherForecast ?? undefined);
+  }, [scored, farmPolygon, radiusKm, weatherForecast]);
 
   const handleClear = () => {
     mapRef.current?.clear();
     setFarmPolygon(null);
     setRawReports([]);
+    setWeatherForecast(null);
     setHasRun(false);
     setErrorKey(null);
   };
@@ -83,8 +87,15 @@ export default function App() {
 
       const c = centroid(farmPolygon);
       const box = boundingBoxAround(c, radiusKm);
+      
+      // Fetch disease reports
       const reports = await fetchReportsInBoundingBox(box);
       setRawReports(reports);
+
+      // Fetch weather forecast (optional, doesn't block assessment)
+      const weather = await fetchWeatherForecast(c);
+      setWeatherForecast(weather);
+
       setHasRun(true);
 
       // Scan completed successfully — now decrement the credit.

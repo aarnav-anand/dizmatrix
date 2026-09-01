@@ -5,8 +5,10 @@ import type {
   LatLng,
   RiskLevel,
   ScoredReport,
+  WeatherForecast,
 } from "../types";
 import { areaHectares, centroid, haversineKm, isPointInPolygon } from "./geo";
+import { assessEpidemiologicalRisks, summarizeRiskFactors } from "./epidemiology";
 
 const RECENCY_HALF_LIFE_DAYS = 60; // a report loses half its recency weight every ~2 months
 
@@ -60,7 +62,8 @@ export function scoreReports(
 export function buildAssessment(
   scored: ScoredReport[],
   farmPolygon: LatLng[],
-  radiusKm: number
+  radiusKm: number,
+  weatherForecast?: WeatherForecast
 ): FarmAssessment {
   const groups = new Map<string, ScoredReport[]>();
   for (const r of scored) {
@@ -71,6 +74,14 @@ export function buildAssessment(
     groups.get(key)!.push(r);
   }
 
+  // Extract crops for epidemiological assessment
+  const cropsInAssessment = Array.from(new Set(
+    scored.map((r) => r.crop ?? "Unknown crop").filter((c) => c.trim())
+  ));
+
+  // Compute epidemiological risks based on weather forecast
+  const epidemiologicalRisks = assessEpidemiologicalRisks(weatherForecast, cropsInAssessment);
+
   // Normalise raw weighted sums onto a 0-100 scale using a saturating curve,
   // so a handful of very close, very recent, high-confidence hits reads as
   // "critical" without requiring dozens of reports to max out.
@@ -78,7 +89,26 @@ export function buildAssessment(
     .map(([key, group]) => {
       const [crop, disease] = key.split("::");
       const rawSum = group.reduce((s, r) => s + r.weight, 0);
-      const score = 100 * (1 - Math.exp(-rawSum / 1.6));
+      let score = 100 * (1 - Math.exp(-rawSum / 1.6));
+
+      // Apply weather boost if applicable
+      let weatherBoost = 1.0;
+      const matchingEpiRisks = epidemiologicalRisks.filter((epi) =>
+        crop.toLowerCase().includes("unknown")
+          ? false
+          : epi.affectedCrops.some(
+              (c) =>
+                c.toLowerCase().includes(crop.toLowerCase()) ||
+                crop.toLowerCase().includes(c.toLowerCase())
+            )
+      );
+
+      if (matchingEpiRisks.length > 0) {
+        // Apply average weather boost from matching epidemiological risks
+        weatherBoost = matchingEpiRisks.reduce((sum, epi) => sum + epi.weatherBoost, 0) / matchingEpiRisks.length;
+        score = score * weatherBoost;
+      }
+
       const insideCount = group.filter((r) => r.insidePolygon).length;
       const nearestKm = Math.min(...group.map((r) => r.distanceKm));
       const avgConfidence =
@@ -92,13 +122,15 @@ export function buildAssessment(
       return {
         crop,
         disease,
-        score: Math.round(score * 10) / 10,
-        level: levelFromScore(score),
+        score: Math.min(100, Math.round(score * 10) / 10), // Cap at 100
+        level: levelFromScore(Math.min(100, score)),
         reportCount: group.length,
         insideCount,
         nearestKm: Math.round(nearestKm * 10) / 10,
         avgConfidence: Math.round(avgConfidence * 100) / 100,
         mostRecent,
+        epidemiologicalRisks: matchingEpiRisks,
+        weatherBoost: weatherBoost > 1 ? Math.round((weatherBoost - 1) * 100) : undefined,
       };
     })
     .sort((a, b) => b.score - a.score);
@@ -113,12 +145,17 @@ export function buildAssessment(
       ) / 10
     : 0;
 
+  // Generate risk factors summary
+  const riskFactors = summarizeRiskFactors(epidemiologicalRisks);
+
   return {
     overallScore,
     overallLevel: levelFromScore(overallScore),
     totalReportsConsidered: scored.length,
     areaHectares: Math.round(areaHectares(farmPolygon) * 100) / 100,
     diseases,
+    weatherForecast,
+    riskFactors,
   };
 }
 

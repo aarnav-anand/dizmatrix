@@ -49,7 +49,14 @@
     "insideField": "{{count}} inside your boundary",
     "lastSeen": "Last reported",
     "avgConfidence": "Avg. detection confidence",
-    "sourceNote": "Assessment derived from crowd-reported field observations. Treat as guidance, not diagnosis."
+    "sourceNote": "Assessment derived from crowd-reported field observations. Treat as guidance, not diagnosis.",
+    "weatherFactors": "Environmental Risk Factors",
+    "currentConditions": "Current Weather Conditions",
+    "temperature": "Temperature",
+    "humidity": "Humidity",
+    "precipitation": "Precipitation",
+    "weatherRisks": "Diseases with favorable conditions in forecast",
+    "daysOfFavorableConditions": "days favorable"
   },
   "risk": {
     "low": "Low",
@@ -70,5 +77,39 @@
     "fetchFailed": "Couldn't reach the report database. Check your connection and try again.",
     "needPolygon": "Draw a field boundary first.",
     "polygonOnWater": "Your field boundary appears to be drawn over water. No credit has been deducted — please clear the shape and redraw it over your actual farmland."
+  },
+  "prevention": {
+    "improve_ventilation": "Improve air ventilation around plants",
+    "avoid_crowding": "Reduce plant crowding and spacing",
+    "remove_infected_leaves": "Remove and destroy infected leaves",
+    "reduce_leaf_wetness": "Minimize leaf wetness; water at soil level",
+    "fungicide_spray": "Apply fungicide spray on schedule",
+    "remove_infected_plants": "Remove and destroy severely infected plants",
+    "apply_fungicide": "Apply preventive fungicide sprays",
+    "plant_resistant_variety": "Plant disease-resistant varieties",
+    "crop_rotation": "Practice crop rotation",
+    "improve_drainage": "Improve soil drainage and avoid waterlogging",
+    "use_resistant_variety": "Use pathogen-resistant seed varieties",
+    "quarantine": "Quarantine infected plants; avoid spreading",
+    "control_aphids": "Control aphid and insect vectors",
+    "use_netting": "Use row covers or fine netting",
+    "use_well_draining_soil": "Use well-draining potting/seedling soil",
+    "avoid_overcrowding": "Avoid overcrowding seedlings"
+  },
+  "diseases": {
+    "powdery_mildew": "Powdery Mildew",
+    "downy_mildew": "Downy Mildew",
+    "early_blight": "Early Blight",
+    "late_blight": "Late Blight",
+    "rust": "Rust Diseases",
+    "septoria_leaf_blotch": "Septoria Leaf Blotch",
+    "anthracnose": "Anthracnose",
+    "bacterial_blight": "Bacterial Blight",
+    "bacterial_wilt": "Bacterial Wilt",
+    "mosaic_virus": "Mosaic Virus",
+    "leaf_curl": "Leaf Curl Disease",
+    "grey_mold": "Grey Mold (Botrytis)",
+    "powdery_scab": "Powdery Scab",
+    "damping_off": "Damping Off"
   }
 }

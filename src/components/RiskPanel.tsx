@@ -52,6 +52,45 @@ export default function RiskPanel({ assessment, radiusKm }: Props) {
         </div>
       </div>
 
+      {/* Weather-based risk factors */}
+      {assessment.riskFactors && assessment.riskFactors.length > 0 && (
+        <div className="card risk-factors-card">
+          <p className="risk-factors-title">🌡️ {t("results.weatherFactors")}</p>
+          {assessment.riskFactors.map((factor, idx) => (
+            <p key={idx} className="risk-factor-item">
+              • {factor}
+            </p>
+          ))}
+        </div>
+      )}
+
+      {/* Weather forecast summary */}
+      {assessment.weatherForecast && assessment.weatherForecast.current && (
+        <div className="card weather-summary-card">
+          <p className="weather-title">{t("results.currentConditions")}</p>
+          <div className="weather-grid">
+            <div className="weather-item">
+              <span className="weather-label">{t("results.temperature")}</span>
+              <span className="weather-value">
+                {assessment.weatherForecast.current.temperature.toFixed(1)}°C
+              </span>
+            </div>
+            <div className="weather-item">
+              <span className="weather-label">{t("results.humidity")}</span>
+              <span className="weather-value">
+                {assessment.weatherForecast.current.humidity}%
+              </span>
+            </div>
+            <div className="weather-item">
+              <span className="weather-label">{t("results.precipitation")}</span>
+              <span className="weather-value">
+                {assessment.weatherForecast.current.precipitation}mm
+              </span>
+            </div>
+          </div>
+        </div>
+      )}
+
       {assessment.diseases.length === 0 ? (
         <p className="no-reports-note">{t("results.noReports", { radius: radiusKm })}</p>
       ) : (
@@ -70,6 +109,14 @@ export default function RiskPanel({ assessment, radiusKm }: Props) {
                 </div>
                 <span className="level-pill">{t(`risk.${d.level}`)}</span>
               </div>
+
+              {/* Weather boost indicator */}
+              {d.weatherBoost && d.weatherBoost > 0 && (
+                <div className="weather-boost-indicator">
+                  🌡️ +{d.weatherBoost}% risk boost from weather conditions
+                </div>
+              )}
+
               <div className="disease-card-meta">
                 <div>
                   {t("results.nearest")}:{" "}
@@ -88,6 +135,27 @@ export default function RiskPanel({ assessment, radiusKm }: Props) {
                   </span>
                 </div>
               </div>
+
+              {/* Epidemiological risks */}
+              {d.epidemiologicalRisks && d.epidemiologicalRisks.length > 0 && (
+                <div className="epidemiological-risks">
+                  <p className="risks-title">{t("results.weatherRisks")}</p>
+                  {d.epidemiologicalRisks.map((risk, idx) => (
+                    <div key={idx} className="risk-item">
+                      <div className="risk-name">{risk.name}</div>
+                      <div className="risk-details">
+                        <span className="risk-matching-days">
+                          {risk.matchingDays} {t("results.daysOfFavorableConditions")}
+                        </span>
+                        <span className="risk-conditions">
+                          {risk.conditions.idealTemperatureMin}–{risk.conditions.idealTemperatureMax}°C,{" "}
+                          &gt;{risk.conditions.idealHumidityMin}%
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           );
         })
